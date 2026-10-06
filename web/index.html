@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (let r of registrations) r.unregister();
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then(function(names) {
+        for (let n of names) caches.delete(n);
+      });
+    }
+  </script>
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Zerodha Kite Trading Platform">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="zerodha">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>Zerodha Kite - Trading Platform</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Firebase JS SDK (v10.8.0) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyAJDusEvuQ3YzSuFav1n9KHncFPKd--Ei4",
+      authDomain: "kite-e17ed.firebaseapp.com",
+      projectId: "kite-e17ed",
+      storageBucket: "kite-e17ed.firebasestorage.app",
+      messagingSenderId: "80034318506",
+      appId: "1:80034318506:web:a834328a028ad9d9e568d3",
+      measurementId: "G-Z1LW9WTLCY"
+    };
+
+    // Initialize Firebase
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+      firebase.analytics();
+      window.db = firebase.firestore();
+      window.auth = firebase.auth();
+      console.log("Firebase initialized successfully for project: kite-e17ed");
+    }
+
+    // Helper: Save credentials & user profile to Firestore
+    window.createAccountInFirestore = function(email, password, fullName, phone, callbackName) {
+      const db = window.db;
+      const auth = window.auth;
+      const userId = 'AB' + Math.floor(1000 + Math.random() * 9000);
+      const userObj = {
+        userId: userId,
+        userName: fullName || email.split('@')[0],
+        email: email,
+        password: password, // Stored in Firestore credentials record
+        phone: phone || '+91 98765 43210',
+        pan: 'ABCDE' + Math.floor(1000 + Math.random() * 8999) + 'F',
+        dematDpId: '12081600' + Math.floor(10000000 + Math.random() * 89999999),
+        bankName: 'HDFC Bank Ltd',
+        bankAccountNo: '•••• •••• ' + Math.floor(1000 + Math.random() * 8999),
+        createdAt: new Date().toISOString(),
+      };
+
+      // 1. Save directly to Firestore users collection
+      db.collection('users').doc(email.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_')).set(userObj, { merge: true })
+        .then(() => {
+          console.log("User credentials & profile saved to Firestore for:", email);
+          // Try Firebase Auth as well
+          auth.createUserWithEmailAndPassword(email, password).catch(e => console.log("Firebase Auth notice:", e.message));
+          if (window[callbackName]) window[callbackName](JSON.stringify({ success: true, user: userObj }));
+        })
+        .catch(err => {
+          console.error("Firestore user creation error:", err);
+          if (window[callbackName]) window[callbackName](JSON.stringify({ success: false, error: err.message }));
+        });
+    };
+
+    window.loginUserWithFirebaseAuth = function(email, password) {
+      if (!window.auth) return;
+      window.auth.signInWithEmailAndPassword(email, password)
+        .then(userCred => console.log('Firebase Auth User logged in:', userCred.user.email))
+        .catch(err => console.log('Firebase Auth notice:', err.message));
+    };
+
+    window.verifyUserInFirestore = function(email, password, callbackName) {
+      const db = window.db;
+      const docId = email.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
+      
+      const firestoreRestCheck = function() {
+        fetch(`https://firestore.googleapis.com/v1/projects/kite-e17ed/databases/(default)/documents/users/${docId}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data && data.fields) {
+              const u = {
+                userId: data.fields.userId ? data.fields.userId.stringValue : 'AB1234',
+                userName: data.fields.userName ? data.fields.userName.stringValue : email.split('@')[0],
+                email: data.fields.email ? data.fields.email.stringValue : email,
+                password: data.fields.password ? data.fields.password.stringValue : '',
+                phone: data.fields.phone ? data.fields.phone.stringValue : '+91 98765 43210',
+                pan: data.fields.pan ? data.fields.pan.stringValue : 'ABCDE1234F',
+                dematDpId: data.fields.dematDpId ? data.fields.dematDpId.stringValue : '1208160012345678',
+                bankName: data.fields.bankName ? data.fields.bankName.stringValue : 'HDFC Bank Ltd',
+                bankAccountNo: data.fields.bankAccountNo ? data.fields.bankAccountNo.stringValue : '•••• •••• 4321'
+              };
+              if (!u.password) {
+                if (window[callbackName]) window[callbackName](JSON.stringify({ success: false, error: 'Account credentials not found in Firestore. Please click "Signup for Kite" to register first.' }));
+              } else if (u.password !== password) {
+                if (window[callbackName]) window[callbackName](JSON.stringify({ success: false, error: 'Incorrect password for this Gmail account.' }));
+              } else {
+                console.log("User verified via Firestore REST API:", u.email);
+                if (window[callbackName]) window[callbackName](JSON.stringify({ success: true, user: u }));
+              }
+            } else {
+              console.warn("User not found in Firestore REST API:", email);
+              if (window[callbackName]) window[callbackName](JSON.stringify({ success: false, error: 'Account not found in Firestore. Please click "Signup for Kite" to register first.' }));
+            }
+          })
+          .catch(err => {
+            console.warn("Firestore REST check error:", err);
+            if (window[callbackName]) window[callbackName](JSON.stringify({ success: false, error: 'Account not found in Firestore. Please click "Signup for Kite" to register first.' }));
+          });
+      };
+
+      if (db) {
+        db.collection('users').doc(docId).get()
+          .then((doc) => {
+            if (doc.exists) {
+              const u = doc.data();
+              if (!u.password) {
+                if (window[callbackName]) window[callbackName](JSON.stringify({ success: false, error: 'Account credentials not found in Firestore. Please click "Signup for Kite" to register first.' }));
+              } else if (u.password !== password) {
+                if (window[callbackName]) window[callbackName](JSON.stringify({ success: false, error: 'Incorrect password for this Gmail account.' }));
+              } else {
+                console.log("User verified from Firestore JS SDK:", u.email);
+                if (window[callbackName]) window[callbackName](JSON.stringify({ success: true, user: u }));
+              }
+            } else {
+              console.warn("User doc not found via JS SDK, trying REST API check:", email);
+              firestoreRestCheck();
+            }
+          })
+          .catch((err) => {
+            console.warn("Firestore JS lookup error, trying REST API fallback:", err);
+            firestoreRestCheck();
+          });
+      } else {
+        firestoreRestCheck();
+      }
+    };
+
+    // Helper functions for Firestore sync
+    window.saveOrderToFirestore = function(orderJsonStr) {
+      try {
+        const order = JSON.parse(orderJsonStr);
+        window.db.collection('orders').doc(order.id).set(order)
+          .then(() => console.log('Order saved to Firestore:', order.id))
+          .catch(err => console.warn('Firestore Order save error:', err));
+      } catch(e) {
+        console.error('Error parsing order JSON:', e);
+      }
+    };
+
+    window.saveUserProfileToFirestore = function(profileJsonStr) {
+      try {
+        const profile = JSON.parse(profileJsonStr);
+        window.db.collection('users').doc(profile.email ? profile.email.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_') : profile.userId).set(profile, { merge: true })
+          .then(() => console.log('User profile synced to Firestore:', profile.userId))
+          .catch(err => console.warn('Firestore User save error:', err));
+      } catch(e) {
+        console.error('Error parsing profile JSON:', e);
+      }
+    };
+
+    window.saveAlertToFirestore = function(alertJsonStr) {
+      try {
+        const alert = JSON.parse(alertJsonStr);
+        window.db.collection('alerts').doc(alert.id).set(alert)
+          .then(() => console.log('Alert synced to Firestore:', alert.id))
+          .catch(err => console.warn('Firestore Alert save error:', err));
+      } catch(e) {
+        console.error('Error parsing alert JSON:', e);
+      }
+    };
+
+    // Browser session persistence across page refreshes
+    window.persistKiteSession = function(isLoggedIn, profileJsonStr) {
+      try {
+        if (isLoggedIn) {
+          localStorage.setItem('kite_logged_in', 'true');
+          localStorage.setItem('kite_user_profile', profileJsonStr);
+          sessionStorage.setItem('kite_logged_in', 'true');
+          sessionStorage.setItem('kite_user_profile', profileJsonStr);
+          console.log("Kite session persisted natively in browser.");
+        } else {
+          localStorage.removeItem('kite_logged_in');
+          localStorage.removeItem('kite_user_profile');
+          sessionStorage.removeItem('kite_logged_in');
+          sessionStorage.removeItem('kite_user_profile');
+          console.log("Kite session cleared natively from browser.");
+        }
+      } catch (e) {
+        console.error('Session persist error:', e);
+      }
+    };
+
+    window.getKiteSession = function() {
+      try {
+        const loggedIn = localStorage.getItem('kite_logged_in') || sessionStorage.getItem('kite_logged_in');
+        const profileStr = localStorage.getItem('kite_user_profile') || sessionStorage.getItem('kite_user_profile');
+        if (loggedIn === 'true' && profileStr) {
+          return JSON.stringify({ isLoggedIn: true, profile: JSON.parse(profileStr) });
+        }
+      } catch (e) {
+        console.error('Session get error:', e);
+      }
+      return JSON.stringify({ isLoggedIn: false });
+    };
+  </script>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
